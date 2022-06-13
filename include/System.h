@@ -194,10 +194,10 @@ public:
 
 private:
 
-    void SaveAtlas(int type);
-    bool LoadAtlas(int type);
+    //void SaveAtlas(int type);
+    //bool LoadAtlas(int type);
 
-    string CalculateCheckSum(string filename, int type);
+    //string CalculateCheckSum(string filename, int type);
 
     // Input sensor
     eSensor mSensor;
@@ -210,6 +210,7 @@ private:
 
     // Map structure that stores the pointers to all KeyFrames and MapPoints.
     //Map* mpMap;
+    public:
     Atlas* mpAtlas;
 
     // Tracker. It receives a frame and computes the associated camera pose.
@@ -217,7 +218,8 @@ private:
     // performs relocalization if tracking fails.
     Tracking* mpTracker;
 
-    // Local Mapper. It manages the local map and performs local bundle adjustment.
+    private:
+        // Local Mapper. It manages the local map and performs local bundle adjustment.
     LocalMapping* mpLocalMapper;
 
     // Loop Closer. It searches loops with every new keyframe. If there is a loop it performs
@@ -226,8 +228,9 @@ private:
 
     // The viewer draws the map and the current camera pose. It uses Pangolin.
     Viewer* mpViewer;
-
+    public:
     FrameDrawer* mpFrameDrawer;
+    private:
     MapDrawer* mpMapDrawer;
 
     // System threads: Local Mapping, Loop Closing, Viewer.

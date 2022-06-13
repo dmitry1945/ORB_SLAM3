@@ -64,11 +64,29 @@ int main(int argc, char **argv)
 
     // Main loop
     cv::Mat imLeft, imRight;
-    for(int ni=0; ni<nImages; ni++)
+    //for (int ni = 7530; ni < nImages; ni++)
+    for (int ni = 0; ni < nImages; ni++)
     {
         // Read left and right images from file
-        imLeft = cv::imread(vstrImageLeft[ni],cv::IMREAD_UNCHANGED); //,cv::IMREAD_UNCHANGED);
-        imRight = cv::imread(vstrImageRight[ni],cv::IMREAD_UNCHANGED); //,cv::IMREAD_UNCHANGED);
+        if (0)
+        {
+
+
+            imLeft = cv::imread(vstrImageLeft[ni], cv::IMREAD_UNCHANGED); //,cv::IMREAD_UNCHANGED);
+            imRight = cv::imread(vstrImageRight[ni], cv::IMREAD_UNCHANGED); //,cv::IMREAD_UNCHANGED);
+        }
+        else
+        {
+            cv::Rect pic1(0, 0, 3040 / 2, 1080);
+            cv::Rect pic2(3040 / 2, 0, 3040 / 2, 1080);
+            cv::Mat im = cv::imread(vstrImageLeft[ni], cv::IMREAD_GRAYSCALE); //,cv::IMREAD_UNCHANGED);
+            std::cout << "F["<< ni << "] -" << vstrImageLeft[ni] << std::endl;
+
+            imLeft = im(pic1);
+            imRight = im(pic2);
+            //cv::imshow("sss", imLeft);
+            //cv::waitKey(10);
+        }
         double tframe = vTimestamps[ni];
 
         if(imLeft.empty())
@@ -80,42 +98,18 @@ int main(int argc, char **argv)
 
         if(imageScale != 1.f)
         {
-#ifdef REGISTER_TIMES
-    #ifdef COMPILEDWITHC11
-            std::chrono::steady_clock::time_point t_Start_Resize = std::chrono::steady_clock::now();
-    #else
-            std::chrono::monotonic_clock::time_point t_Start_Resize = std::chrono::monotonic_clock::now();
-    #endif
-#endif
             int width = imLeft.cols * imageScale;
             int height = imLeft.rows * imageScale;
             cv::resize(imLeft, imLeft, cv::Size(width, height));
             cv::resize(imRight, imRight, cv::Size(width, height));
-#ifdef REGISTER_TIMES
-    #ifdef COMPILEDWITHC11
-            std::chrono::steady_clock::time_point t_End_Resize = std::chrono::steady_clock::now();
-    #else
-            std::chrono::monotonic_clock::time_point t_End_Resize = std::chrono::monotonic_clock::now();
-    #endif
-            t_resize = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t_End_Resize - t_Start_Resize).count();
-            SLAM.InsertResizeTime(t_resize);
-#endif
         }
 
-#ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-#else
-        std::chrono::monotonic_clock::time_point t1 = std::chrono::monotonic_clock::now();
-#endif
 
         // Pass the images to the SLAM system
         SLAM.TrackStereo(imLeft,imRight,tframe);
 
-#ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-#else
-        std::chrono::monotonic_clock::time_point t2 = std::chrono::monotonic_clock::now();
-#endif
 
 #ifdef REGISTER_TIMES
         t_track = t_resize + std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t2 - t1).count();
@@ -157,38 +151,93 @@ int main(int argc, char **argv)
     return 0;
 }
 
-void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft,
-                vector<string> &vstrImageRight, vector<double> &vTimestamps)
+//void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft,
+//                vector<string> &vstrImageRight, vector<double> &vTimestamps)
+//{
+//    ifstream fTimes;
+//    string strPathTimeFile = strPathToSequence + "/times.txt";
+//    fTimes.open(strPathTimeFile.c_str());
+//    while(!fTimes.eof())
+//    {
+//        string s;
+//        getline(fTimes,s);
+//        if(!s.empty())
+//        {
+//            stringstream ss;
+//            ss << s;
+//            double t;
+//            ss >> t;
+//            vTimestamps.push_back(t);
+//        }
+//    }
+//
+//    string strPrefixLeft = strPathToSequence + "/image_0/";
+//    string strPrefixRight = strPathToSequence + "/image_1/";
+//
+//    const int nTimes = vTimestamps.size();
+//    vstrImageLeft.resize(nTimes);
+//    vstrImageRight.resize(nTimes);
+//
+//    for(int i=0; i<nTimes; i++)
+//    {
+//        stringstream ss;
+//        ss << setfill('0') << setw(6) << i;
+//        vstrImageLeft[i] = strPrefixLeft + ss.str() + ".png";
+//        vstrImageRight[i] = strPrefixRight + ss.str() + ".png";
+//    }
+//}
+
+
+#include <string>
+#include <iostream>
+#include <filesystem>
+#include <algorithm>
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
+#include <string>
+#include <vector>
+namespace fs = std::filesystem;
+
+
+void LoadImages(const string& strPathToSequence, vector<string>& vstrImageFilenames, vector<string>& vstrImageFilenamesRight, vector<double>& vTimestamps)
 {
-    ifstream fTimes;
-    string strPathTimeFile = strPathToSequence + "/times.txt";
-    fTimes.open(strPathTimeFile.c_str());
-    while(!fTimes.eof())
+    //std::string path = strPathToSequence;
+    //auto entry = fs::directory_iterator(path);
+    //int entry_count = 2;
+    //while (entry != fs::directory_iterator())
+    //{
+
+    //    stringstream ss;
+    //    ss << setfill('0') << setw(6) << entry_count;
+    //    std::string filename = strPathToSequence + "/frame_" + ss.str() + "_0.png";
+    //    vstrImageFilenames.push_back(filename);
+    //    vTimestamps.push_back(0.1 * (double)entry_count);
+    //    //std::cout << filename << ", count " << entry_count << std::endl;
+    //    entry++;
+    //    entry_count++;
+    //    // if (entry_count > 1600) break;
+    //}
+
+    std::string path = strPathToSequence;
+    auto entry = fs::directory_iterator(path);
+    int entry_count = 0;
+    while (entry != fs::directory_iterator())
     {
-        string s;
-        getline(fTimes,s);
-        if(!s.empty())
-        {
-            stringstream ss;
-            ss << s;
-            double t;
-            ss >> t;
-            vTimestamps.push_back(t);
-        }
+        std::string filename = entry->path().string();
+        vstrImageFilenames.push_back(filename);
+        vTimestamps.push_back(0.1 * (double)entry_count);
+        //std::cout << filename << ", count " << entry_count << std::endl;
+        entry++;
+        entry_count++;
+        // if (entry_count > 1600) break;
     }
-
-    string strPrefixLeft = strPathToSequence + "/image_0/";
-    string strPrefixRight = strPathToSequence + "/image_1/";
-
-    const int nTimes = vTimestamps.size();
-    vstrImageLeft.resize(nTimes);
-    vstrImageRight.resize(nTimes);
-
-    for(int i=0; i<nTimes; i++)
-    {
-        stringstream ss;
-        ss << setfill('0') << setw(6) << i;
-        vstrImageLeft[i] = strPrefixLeft + ss.str() + ".png";
-        vstrImageRight[i] = strPrefixRight + ss.str() + ".png";
-    }
+    std::sort(vstrImageFilenames.begin(), vstrImageFilenames.end(),
+        [](const auto& lhs, const auto& rhs) {
+            return lhs < rhs;
+        });
+    //for (const auto& file : vstrImageFilenames) {
+    //    std::cout << file << '\n';
+    //}
+    //std::cout << "Count - " << entry_count << std::endl;
 }

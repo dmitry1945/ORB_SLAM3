@@ -394,6 +394,10 @@ bool LoopClosing::NewDetectCommonRegions()
 
 
             mbLoopDetected = mnLoopNumCoincidences >= 3;
+            if (mbLoopDetected)
+            {
+                std::cout << "bCommonRegion - mbLoopDetected!" << std::endl;
+            }
             mnLoopNumNotFound = 0;
 
             if(!mbLoopDetected)
@@ -505,6 +509,14 @@ bool LoopClosing::NewDetectCommonRegions()
     if(!bLoopDetectedInKF && !vpLoopBowCand.empty())
     {
         mbLoopDetected = DetectCommonRegionsFromBoW(vpLoopBowCand, mpLoopMatchedKF, mpLoopLastCurrentKF, mg2oLoopSlw, mnLoopNumCoincidences, mvpLoopMPs, mvpLoopMatchedMPs);
+        if (mbLoopDetected)
+        {
+            std::cout << "mbLoopDetected - DetectCommonRegionsFromBoW!" << std::endl;
+            std::cout << "Current point: " << mpLoopMatchedKF->GetPose().translation().transpose() << std::endl;
+            std::cout << "Loop point   : " << mpLoopLastCurrentKF->GetPose().translation().transpose() << std::endl;
+            std::cout << "diff   : " << (mpLoopLastCurrentKF->GetPose().translation() - mpLoopMatchedKF->GetPose().translation()).transpose() << std::endl;
+            std::cout << "Norm   : " << (mpLoopLastCurrentKF->GetPose().translation() - mpLoopMatchedKF->GetPose().translation()).norm() << std::endl;
+        }
     }
     // Merge candidates
     if(!bMergeDetectedInKF && !vpMergeBowCand.empty())

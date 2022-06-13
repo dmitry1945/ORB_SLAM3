@@ -275,7 +275,7 @@ void LocalMapping::Run()
         if(CheckFinish())
             break;
 
-        usleep(3000);
+        usleep(5000);
     }
 
     SetFinish();
@@ -387,6 +387,11 @@ void LocalMapping::MapPointCulling()
 
 void LocalMapping::CreateNewMapPoints()
 {
+    int added_points = 0;
+    int orig_matches = 0;
+    int ignored_points = 0;
+
+
     // Retrieve neighbor keyframes in covisibility graph
     int nn = 10;
     // For stereo inertial case
@@ -697,7 +702,6 @@ void LocalMapping::CreateNewMapPoints()
             
             pMP->AddObservation(mpCurrentKeyFrame,idx1);
             pMP->AddObservation(pKF2,idx2);
-
             mpCurrentKeyFrame->AddMapPoint(pMP,idx1);
             pKF2->AddMapPoint(pMP,idx2);
 
@@ -1261,7 +1265,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
 
     mScale=1.0;
 
-    mInitTime = mpTracker->mLastFrame.mTimeStamp-vpKF.front()->mTimeStamp;
+    mInitTime = mpTracker->mLastFrame->mTimeStamp-vpKF.front()->mTimeStamp;
 
     std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
     Optimizer::InertialOptimization(mpAtlas->GetCurrentMap(), mRwg, mScale, mbg, mba, mbMonocular, infoInertial, false, false, priorG, priorA);
@@ -1296,7 +1300,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     if (!mpAtlas->isImuInitialized())
     {
         mpAtlas->SetImuInitialized();
-        mpTracker->t0IMU = mpTracker->mCurrentFrame.mTimeStamp;
+        mpTracker->t0IMU = mpTracker->mCurrentFrame->mTimeStamp;
         mpCurrentKeyFrame->bImu = true;
     }
 

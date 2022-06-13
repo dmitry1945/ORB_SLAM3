@@ -51,6 +51,7 @@ public:
     cv::Mat DrawRightFrame(float imageScale=1.f);
 
     bool both;
+    int mnTracked, mnTrackedVO;
 
 protected:
 
@@ -62,7 +63,6 @@ protected:
     vector<cv::KeyPoint> mvCurrentKeys,mvCurrentKeysRight;
     vector<bool> mvbMap, mvbVO;
     bool mbOnlyTracking;
-    int mnTracked, mnTrackedVO;
     vector<cv::KeyPoint> mvIniKeys;
     vector<int> mvIniMatches;
     int mState;

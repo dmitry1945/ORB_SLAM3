@@ -22,6 +22,7 @@
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
+#include <opencv2/video/tracking.hpp>
 
 #include "Viewer.h"
 #include "FrameDrawer.h"
@@ -41,6 +42,8 @@
 
 #include <mutex>
 #include <unordered_set>
+
+void usleep(__int64 usec);
 
 namespace ORB_SLAM3
 {
@@ -135,8 +138,8 @@ public:
     int mSensor;
 
     // Current Frame
-    Frame mCurrentFrame;
-    Frame mLastFrame;
+    std::shared_ptr<Frame> mCurrentFrame;
+    std::shared_ptr<Frame> mLastFrame;
 
     cv::Mat mImGray;
 
@@ -145,7 +148,7 @@ public:
     std::vector<int> mvIniMatches;
     std::vector<cv::Point2f> mvbPrevMatched;
     std::vector<cv::Point3f> mvIniP3D;
-    Frame mInitialFrame;
+    std::shared_ptr<Frame> mInitialFrame;
 
     // Lists used to recover the full camera trajectory at the end of the execution.
     // Basically we store the reference keyframe for each frame and its relative transformation
@@ -366,10 +369,12 @@ protected:
     std::mutex mMutexStop;
 #endif
 
+    Map* pCurrentMap;
+
 public:
     cv::Mat mImRight;
 };
 
 } //namespace ORB_SLAM
 
-#endif // TRACKING_H
+#endif 

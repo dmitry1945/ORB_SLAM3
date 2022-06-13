@@ -92,6 +92,19 @@ std::string strToUpper(const std::string& s)
   return ret;
 }
 
+
+int vasprintf(char** strp, const char* fmt, va_list ap) {
+    va_list ap2;
+    va_copy(ap2, ap);
+    char tmp[1];
+    int size = vsnprintf(tmp, 1, fmt, ap2);
+    if (size <= 0) return size;
+    va_end(ap2);
+    size += 1;
+    *strp = (char*)malloc(size * sizeof(char));
+    return vsnprintf(*strp, size, fmt, ap);
+}
+
 std::string formatString(const char* fmt, ...)
 {
   char* auxPtr = NULL;

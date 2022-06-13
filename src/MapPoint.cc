@@ -159,10 +159,14 @@ void MapPoint::AddObservation(KeyFrame* pKF, int idx)
 
     mObservations[pKF]=indexes;
 
-    if(!pKF->mpCamera2 && pKF->mvuRight[idx]>=0)
-        nObs+=2;
+    if (!pKF->mpCamera2 && pKF->mvuRight[idx] >= 0)
+    {
+        nObs += 2;
+    }
     else
+    {
         nObs++;
+    }
 }
 
 void MapPoint::EraseObservation(KeyFrame* pKF)
@@ -179,7 +183,9 @@ void MapPoint::EraseObservation(KeyFrame* pKF)
                 if(!pKF->mpCamera2 && pKF->mvuRight[leftIndex]>=0)
                     nObs-=2;
                 else
+                {
                     nObs--;
+                }
             }
             if(rightIndex != -1){
                 nObs--;
@@ -234,7 +240,6 @@ void MapPoint::SetBadFlag()
             pKF->EraseMapPointMatch(rightIndex);
         }
     }
-
     mpMap->EraseMapPoint(this);
 }
 
@@ -366,9 +371,12 @@ void MapPoint::ComputeDistinctiveDescriptors()
         return;
 
     // Compute distances between them
-    const size_t N = vDescriptors.size();
+    size_t N = vDescriptors.size();
 
-    float Distances[N][N];
+    //float Distances[N][N];
+    std::vector<std::vector<float> > Distances;
+    Distances.resize(N, vector<float>(N, 0));
+
     for(size_t i=0;i<N;i++)
     {
         Distances[i][i]=0;
@@ -385,7 +393,7 @@ void MapPoint::ComputeDistinctiveDescriptors()
     int BestIdx = 0;
     for(size_t i=0;i<N;i++)
     {
-        vector<int> vDists(Distances[i],Distances[i]+N);
+        vector<float> vDists(Distances[i].begin(), Distances[i].end());
         sort(vDists.begin(),vDists.end());
         int median = vDists[0.5*(N-1)];
 

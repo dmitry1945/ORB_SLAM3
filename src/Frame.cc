@@ -42,8 +42,24 @@ float Frame::mfGridElementWidthInv, Frame::mfGridElementHeightInv;
 //For stereo fisheye matching
 cv::BFMatcher Frame::BFmatcher = cv::BFMatcher(cv::NORM_HAMMING);
 
+int Frame::frame_count = 0;
+
+cv::Mat Frame::M1;
+cv::Mat Frame::D1;
+cv::Mat Frame::R1;
+cv::Mat Frame::P1;
+
+cv::Mat Frame::M2;
+cv::Mat Frame::D2;
+cv::Mat Frame::R2;
+cv::Mat Frame::P2;
+cv::Mat Frame::rmap[2][2];
+cv::Mat Frame::H12;
+
+
 Frame::Frame(): mpcpi(NULL), mpImuPreintegrated(NULL), mpPrevFrame(NULL), mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false), mbHasPose(false), mbHasVelocity(false)
 {
+    this->frame_count++;
 #ifdef REGISTER_TIMES
     mTimeStereoMatch = 0;
     mTimeORB_Ext = 0;
@@ -72,6 +88,7 @@ Frame::Frame(const Frame &frame)
      mTlr(frame.mTlr), mRlr(frame.mRlr), mtlr(frame.mtlr), mTrl(frame.mTrl),
      mTcw(frame.mTcw), mbHasPose(false), mbHasVelocity(false)
 {
+    this->frame_count++;
     for(int i=0;i<FRAME_GRID_COLS;i++)
         for(int j=0; j<FRAME_GRID_ROWS; j++){
             mGrid[i][j]=frame.mGrid[i][j];
@@ -103,6 +120,12 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
      mImuCalib(ImuCalib), mpImuPreintegrated(NULL), mpPrevFrame(pPrevF),mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false),
      mpCamera(pCamera) ,mpCamera2(nullptr), mbHasPose(false), mbHasVelocity(false)
 {
+    cv::remap(imLeft, imLeft, Frame::rmap[0][0], Frame::rmap[0][1], cv::INTER_LINEAR);
+    cv::remap(imRight, imRight, Frame::rmap[1][0], Frame::rmap[1][1], cv::INTER_LINEAR);
+    imgLeft = imLeft.clone();
+    imgRight = imRight.clone();
+
+    this->frame_count++;
     // Frame ID
     mnId=nNextId++;
 
@@ -123,6 +146,8 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     thread threadRight(&Frame::ExtractORB,this,1,imRight,0,0);
     threadLeft.join();
     threadRight.join();
+    //Frame::ExtractORB(0,imLeft,0,0);
+    //Frame::ExtractORB(1,imRight,0,0);
 #ifdef REGISTER_TIMES
     std::chrono::steady_clock::time_point time_EndExtORB = std::chrono::steady_clock::now();
 
@@ -133,12 +158,12 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     if(mvKeys.empty())
         return;
 
-    UndistortKeyPoints();
-
+    UndistortStereoKeyPoints();
 #ifdef REGISTER_TIMES
     std::chrono::steady_clock::time_point time_StartStereoMatches = std::chrono::steady_clock::now();
 #endif
-    ComputeStereoMatches();
+        //ComputeStereoMatches();
+    ComputeStereoMatchesORB();
 #ifdef REGISTER_TIMES
     std::chrono::steady_clock::time_point time_EndStereoMatches = std::chrono::steady_clock::now();
 
@@ -203,6 +228,7 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeSt
      mImuCalib(ImuCalib), mpImuPreintegrated(NULL), mpPrevFrame(pPrevF), mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false),
      mpCamera(pCamera),mpCamera2(nullptr), mbHasPose(false), mbHasVelocity(false)
 {
+    this->frame_count++;
     // Frame ID
     mnId=nNextId++;
 
@@ -292,6 +318,7 @@ Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extra
      mImuCalib(ImuCalib), mpImuPreintegrated(NULL),mpPrevFrame(pPrevF),mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false), mpCamera(pCamera),
      mpCamera2(nullptr), mbHasPose(false), mbHasVelocity(false)
 {
+    this->frame_count++;
     // Frame ID
     mnId=nNextId++;
 
@@ -381,6 +408,10 @@ Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extra
     mpMutexImu = new std::mutex();
 }
 
+Frame::~Frame()
+{
+    this->frame_count--;
+}
 
 void Frame::AssignFeaturesToGrid()
 {
@@ -415,13 +446,58 @@ void Frame::AssignFeaturesToGrid()
     }
 }
 
+cv::Ptr<cv::ORB> Features::orb_detector = cv::ORB::create();
+//cv::Ptr<cv::SIFT> Features::orb_detector = cv::SIFT::create();
+cv::BFMatcher* Features::orb_matcher = new cv::BFMatcher(cv::NORM_HAMMING, true);
+std::mutex* Features::common_mutex = new std::mutex();
+cv::Mat Features::imMask;
+
+void Features::InitMask(int rows, int cols)
+{
+    // 255 - means we accept pixel, 0 - ignore them
+    cv::Mat mask(255 * cv::Mat::ones(rows, cols, CV_8U));
+
+    // This is just example for car:
+    for (int x = 0; x < cols / 2; x++)
+    {
+        for (int y = 3 * rows / 5; y < rows; y++)
+        {
+            mask.at<unsigned char>(y, x) = 0;
+        }
+    }
+
+    // Copy mask to the frame mask
+    mask.copyTo(Features::imMask);
+}
+
+static int wta = 4;
+
 void Frame::ExtractORB(int flag, const cv::Mat &im, const int x0, const int x1)
 {
     vector<int> vLapping = {x0,x1};
-    if(flag==0)
-        monoLeft = (*mpORBextractorLeft)(im,cv::Mat(),mvKeys,mDescriptors,vLapping);
+    if (flag == 0)
+    {
+        monoLeft = (*mpORBextractorLeft)(im, cv::Mat(), mvKeys, mDescriptors, vLapping);
+
+        //Features::orb_detector->setMaxFeatures(4000);
+        //Features::orb_detector->setEdgeThreshold(10);
+        //Features::orb_detector->setWTA_K(wta);
+        //Features::orb_detector->detect(im, mvKeys);
+        //Features::orb_detector->compute(im, mvKeys, mDescriptors);
+        //monoLeft = mvKeys.size();
+    }
     else
         monoRight = (*mpORBextractorRight)(im,cv::Mat(),mvKeysRight,mDescriptorsRight,vLapping);
+
+        //Features::InitMask(im.rows, im.cols);
+        
+        //Features::orb_detector->setMaxFeatures(mpORBextractorLeft->GetNFeatures());
+        //Features::orb_detector->setEdgeThreshold(10);
+        //Features::orb_detector->setWTA_K(wta);
+        //Features::orb_detector->detect(im, mvKeys);
+        //Features::orb_detector->compute(im, mvKeys, mDescriptors);
+
+
 }
 
 bool Frame::isSet() const {
@@ -746,37 +822,92 @@ void Frame::ComputeBoW()
 
 void Frame::UndistortKeyPoints()
 {
-    if(mDistCoef.at<float>(0)==0.0)
+    if (mDistCoef.at<float>(0) == 0.0)
     {
-        mvKeysUn=mvKeys;
+        mvKeysUn = mvKeys;
         return;
     }
 
     // Fill matrix with points
-    cv::Mat mat(N,2,CV_32F);
+    cv::Mat mat(N, 2, CV_32F);
 
-    for(int i=0; i<N; i++)
+    for (int i = 0; i < N; i++)
     {
-        mat.at<float>(i,0)=mvKeys[i].pt.x;
-        mat.at<float>(i,1)=mvKeys[i].pt.y;
+        mat.at<float>(i, 0) = mvKeys[i].pt.x;
+        mat.at<float>(i, 1) = mvKeys[i].pt.y;
     }
 
     // Undistort points
-    mat=mat.reshape(2);
-    cv::undistortPoints(mat,mat, static_cast<Pinhole*>(mpCamera)->toK(),mDistCoef,cv::Mat(),mK);
-    mat=mat.reshape(1);
+    mat = mat.reshape(2);
+    cv::Mat sss = static_cast<Pinhole*>(mpCamera)->toK();
+    std::cout << "sss = " << std::endl << sss << std::endl;
+    cv::undistortPoints(mat, mat, static_cast<Pinhole*>(mpCamera)->toK(), mDistCoef, cv::Mat(), mK);
+    mat = mat.reshape(1);
 
 
     // Fill undistorted keypoint vector
     mvKeysUn.resize(N);
-    for(int i=0; i<N; i++)
+    for (int i = 0; i < N; i++)
     {
         cv::KeyPoint kp = mvKeys[i];
-        kp.pt.x=mat.at<float>(i,0);
-        kp.pt.y=mat.at<float>(i,1);
-        mvKeysUn[i]=kp;
+        kp.pt.x = mat.at<float>(i, 0);
+        kp.pt.y = mat.at<float>(i, 1);
+        mvKeysUn[i] = kp;
     }
 
+}
+
+void Frame::UndistortStereoKeyPoints()
+{
+    mvKeysUn = mvKeys;
+    //if (mDistCoef.at<float>(0) == 0.0)
+    //{
+    //    mvKeysUn = mvKeys;
+    //    return;
+    //}
+    //if (N == 0) return;
+    //// Fill matrix with points
+    //cv::Mat mat(N, 2, CV_32F);
+    //for (int i = 0; i < N; i++)
+    //{
+    //    mat.at<float>(i, 0) = mvKeys[i].pt.x;
+    //    mat.at<float>(i, 1) = mvKeys[i].pt.y;
+    //}
+    //// Undistort points
+    //mat = mat.reshape(2);
+
+    //cv::undistortPoints(mat, mat, M1, D1, R1, P1);
+    //mat = mat.reshape(1);
+
+    //for (int i = 0; i < N; i++)
+    //{
+    //    cv::KeyPoint kp = mvKeys[i];
+    //    kp.pt.x = mat.at<float>(i, 0);
+    //    kp.pt.y = mat.at<float>(i, 1);
+    //    mvKeysUn[i] = kp;
+    //}
+
+
+    //if (mvKeysRight.size() == 0) return;
+
+    //cv::Mat mat_r(mvKeysRight.size(), 2, CV_32F);
+    //for (int i = 0; i < mvKeysRight.size(); i++)
+    //{
+    //    mat_r.at<float>(i, 0) = mvKeysRight[i].pt.x;
+    //    mat_r.at<float>(i, 1) = mvKeysRight[i].pt.y;
+    //}
+    //// Undistort points right
+    //mat_r = mat_r.reshape(2);
+    //cv::undistortPoints(mat_r, mat_r, M2, D2, R2, P2);
+    //mat_r = mat_r.reshape(1);
+
+    //for (int i = 0; i < mvKeysRight.size(); i++)
+    //{
+    //    cv::KeyPoint kp = mvKeysRight[i];
+    //    kp.pt.x = mat_r.at<float>(i, 0);
+    //    kp.pt.y = mat_r.at<float>(i, 1);
+    //    mvKeysRight[i] = kp;
+    //}
 }
 
 void Frame::ComputeImageBounds(const cv::Mat &imLeft)
@@ -979,6 +1110,73 @@ void Frame::ComputeStereoMatches()
         }
     }
 }
+
+
+void Frame::ComputeStereoMatchesORB()
+{
+    mvuRight = std::vector<float>(N, -1.0f);
+    mvDepth = std::vector<float>(N, -1.0f);
+
+    vector< cv::DMatch > good_matches;
+    vector< cv::DMatch > check_matches;
+    if (this->mDescriptorsRight.rows == 0) return;
+    if (this->mDescriptors.rows == 0) return;
+    Features::orb_matcher->match(this->mDescriptors, this->mDescriptorsRight, good_matches);
+
+
+    for (size_t i = 0; i < good_matches.size(); i++)
+    {
+        cv::KeyPoint kp1 = this->mvKeys[good_matches[i].queryIdx];
+        cv::KeyPoint kp2 = this->mvKeysRight[good_matches[i].trainIdx];
+        //		if ((std::abs(kp1.pt.y - kp2.pt.y) < 5) && (kp1.pt.x < kp2.pt.x))
+//        if (std::abs(kp1.pt.y - kp2.pt.y) < 15)
+        if ((std::abs(kp1.pt.y - kp2.pt.y) < 20) && (good_matches[i].distance < 100))
+        {
+            check_matches.push_back(good_matches[i]);
+        }
+    }
+    //if (!Frame::emulator_mode)
+    //{
+    //	std::cout << "ComputeStereoMatchesORB: mvKeys = " << this->mvKeys.size() << " , mvKeysRight = " << this->mvKeysRight.size() << ". check_matches = " << check_matches.size() << std::endl;
+    //	cv::Mat im_left;
+    //	cv::Mat im_right;
+    //	cvtColor(this->imLeft, im_left, cv::COLOR_GRAY2RGB);
+    //	cvtColor(this->imRight, im_right, cv::COLOR_GRAY2RGB);
+    //	cv::remap(im_left, im_left, Frame::rmap[0][0], Frame::rmap[0][1], cv::INTER_LINEAR);
+    //	cv::remap(im_right, im_right, Frame::rmap[1][0], Frame::rmap[1][1], cv::INTER_LINEAR);
+
+    //	cv::Mat comp_igm;
+    //	cv::drawMatches(im_left, this->mvKeys, im_right, this->mvKeysRight, check_matches, comp_igm);
+    //	////		cv::imwrite("d:/Work/Espressif/Tech/Arrow/SFM/SW/SFM_SLAM/build/x64/CalibImagesStreet/image_left_recover.jpg", comp_igm);
+    //	cv::imshow("ComputeStereoMatchesORB: ", comp_igm);
+    //	cv::waitKey(1);
+    //}
+    cv::DMatch additional;
+    additional.queryIdx = 4;
+    additional.trainIdx = 8;
+    check_matches.push_back(additional);
+    for (size_t i = 0; i < check_matches.size(); i++)
+    {
+        int iL = check_matches[i].queryIdx;
+        int iR = check_matches[i].trainIdx;
+        const cv::KeyPoint& kpL = mvKeys[iL];
+        const int& levelL = kpL.octave;
+        const cv::KeyPoint& kpR = mvKeysRight[iR];
+        const int& levelR = kpR.octave;
+
+        const float& vL = kpL.pt.y;
+        const float& uL = kpL.pt.x;
+
+        //float disparity = std::sqrt((kpL.pt.x - kpR.pt.x)*(kpL.pt.x - kpR.pt.x) + (kpL.pt.y - kpR.pt.y)*(kpL.pt.y - kpR.pt.y));
+        float disparity = std::abs(kpR.pt.x - kpL.pt.x);
+        if (disparity > 0)
+        {
+            mvDepth[iL] = mbf / disparity;
+            mvuRight[iL] = kpR.pt.x;
+        }
+    }
+}
+
 
 
 void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)

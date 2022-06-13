@@ -16,17 +16,18 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Settings.h"
+#include <Eigen/Dense>
+#include <opencv2/core/eigen.hpp>
+#include <opencv2/core/persistence.hpp>
+
+#include <iostream>
 
 #include "CameraModels/Pinhole.h"
 #include "CameraModels/KannalaBrandt8.h"
 
 #include "System.h"
+#include "Settings.h"
 
-#include <opencv2/core/persistence.hpp>
-#include <opencv2/core/eigen.hpp>
-
-#include <iostream>
 
 using namespace std;
 

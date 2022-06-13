@@ -7,40 +7,61 @@ ENDIF()
 
 MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -W2   -O2 /bigobj")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W2   -O2 /bigobj")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
 
-# Check C++11 or C++0x support
-include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
-CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
-if(COMPILER_SUPPORTS_CXX11)
-   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-   add_definitions(-DCOMPILEDWITHC11)
-   message(STATUS "Using flag -std=c++11.")
-elseif(COMPILER_SUPPORTS_CXX0X)
-   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
-   add_definitions(-DCOMPILEDWITHC0X)
-   message(STATUS "Using flag -std=c++0x.")
-else()
-   message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
-endif()
+# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-deprecated -O3 -march=native ")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-deprecated -O3 -march=native")
+
+# # Check C++11 or C++0x support
+# include(CheckCXXCompilerFlag)
+# CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
+# CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+# if(COMPILER_SUPPORTS_CXX11)
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+#    add_definitions(-DCOMPILEDWITHC11)
+#    message(STATUS "Using flag -std=c++11.")
+# elseif(COMPILER_SUPPORTS_CXX0X)
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+#    add_definitions(-DCOMPILEDWITHC0X)
+#    message(STATUS "Using flag -std=c++0x.")
+# else()
+#    message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+# endif()
+# CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
-find_package(OpenCV 4.4)
+find_package(OpenCV REQUIRED)
+if(NOT OpenCV_FOUND)
+   find_package(OpenCV 2.4.3 QUIET)
    if(NOT OpenCV_FOUND)
-      message(FATAL_ERROR "OpenCV > 4.4 not found.")
+      message(FATAL_ERROR "OpenCV > 2.4.3 not found.")
    endif()
+endif()
 
 MESSAGE("OPENCV VERSION:")
 MESSAGE(${OpenCV_VERSION})
 
+FIND_PACKAGE(Boost REQUIRED COMPONENTS thread system serialization)
+
+# FIND_PACKAGE(Boost)
+#IF (Boost_FOUND)
+    INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
+    ADD_DEFINITIONS( "-DHAS_BOOST" )
+#ENDIF()
+set(Boost_USE_STATIC_LIBS   ON)
+message("Boost_INCLUDE_DIR - ${Boost_INCLUDE_DIR}")
+
+
 find_package(Eigen3 3.1.0 REQUIRED)
+FIND_PACKAGE(OpenGL REQUIRED)
+FIND_PACKAGE(GLEW REQUIRED)
 find_package(Pangolin REQUIRED)
-find_package(realsense2)
+message("Pangolin_INCLUDE_DIRS = ${Pangolin_INCLUDE_DIRS}")
 
 include_directories(
 ${PROJECT_SOURCE_DIR}
@@ -48,12 +69,18 @@ ${PROJECT_SOURCE_DIR}/include
 ${PROJECT_SOURCE_DIR}/include/CameraModels
 ${PROJECT_SOURCE_DIR}/Thirdparty/Sophus
 ${EIGEN3_INCLUDE_DIR}
+${OpenGL_INCLUDE_DIRS}
+${GLEW_INCLUDE_DIRS}
+${GLEW_INCLUDE_DIR}
 ${Pangolin_INCLUDE_DIRS}
+${PROJECT_SOURCE_DIR}/include/camera
 )
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
-add_library(${PROJECT_NAME} SHARED
+set(CMAKE_CXX_STANDARD 17)
+
+add_library(${PROJECT_NAME} STATIC
 src/System.cc
 src/Tracking.cc
 src/LocalMapping.cc
@@ -116,13 +143,16 @@ include/Settings.h)
 add_subdirectory(Thirdparty/g2o)
 
 target_link_libraries(${PROJECT_NAME}
+${Boost_LIBRARIES}
 ${OpenCV_LIBS}
 ${EIGEN3_LIBS}
+${OpenGL_LIBRARIES}
+${GLEW_LIBRARIES}
 ${Pangolin_LIBRARIES}
-${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
-${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
--lboost_serialization
--lcrypto
+${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/${CMAKE_BUILD_TYPE}/DBoW2.lib
+${PROJECT_SOURCE_DIR}/Thirdparty/g2o/bin/${CMAKE_BUILD_TYPE}/g2o.lib
+# -lboost_serialization
+# -lcrypto
 )
 
 # If RealSense SDK is found the library is added and its examples compiled
@@ -194,8 +224,16 @@ add_executable(mono_tum
 target_link_libraries(mono_tum ${PROJECT_NAME})
 
 add_executable(mono_kitti
-        Examples/Monocular/mono_kitti.cc)
+        Examples/Monocular/mono_kitti.cc
+        ${PROJECT_SOURCE_DIR}/src/camera/camera_opencv.cpp
+        )
 target_link_libraries(mono_kitti ${PROJECT_NAME})
+
+# Build tools
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/tools)
+add_executable(bin_vocabulary
+tools/bin_vocabulary.cc)
+target_link_libraries(bin_vocabulary ${PROJECT_NAME})
 
 add_executable(mono_euroc
         Examples/Monocular/mono_euroc.cc)

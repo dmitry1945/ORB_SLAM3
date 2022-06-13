@@ -23,7 +23,7 @@
 #include <thread>
 #include <pangolin/pangolin.h>
 #include <iomanip>
-#include <openssl/md5.h>
+//#include <openssl/md5.h>
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/string.hpp>
 #include <boost/archive/text_iarchive.hpp>
@@ -109,13 +109,13 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     bool loadedAtlas = false;
 
-    if(mStrLoadAtlasFromFile.empty())
+    //if(mStrLoadAtlasFromFile.empty())
     {
         //Load ORB Vocabulary
         cout << endl << "Loading ORB Vocabulary. This could take a while..." << endl;
 
         mpVocabulary = new ORBVocabulary();
-        bool bVocLoad = mpVocabulary->loadFromTextFile(strVocFile);
+        bool bVocLoad = mpVocabulary->loadFromBinaryFile(strVocFile);
         if(!bVocLoad)
         {
             cerr << "Wrong path to vocabulary. " << endl;
@@ -131,51 +131,51 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         cout << "Initialization of Atlas from scratch " << endl;
         mpAtlas = new Atlas(0);
     }
-    else
-    {
-        //Load ORB Vocabulary
-        cout << endl << "Loading ORB Vocabulary. This could take a while..." << endl;
+    //else
+    //{
+    //    //Load ORB Vocabulary
+    //    cout << endl << "Loading ORB Vocabulary. This could take a while..." << endl;
 
-        mpVocabulary = new ORBVocabulary();
-        bool bVocLoad = mpVocabulary->loadFromTextFile(strVocFile);
-        if(!bVocLoad)
-        {
-            cerr << "Wrong path to vocabulary. " << endl;
-            cerr << "Falied to open at: " << strVocFile << endl;
-            exit(-1);
-        }
-        cout << "Vocabulary loaded!" << endl << endl;
+    //    mpVocabulary = new ORBVocabulary();
+    //    bool bVocLoad = mpVocabulary->loadFromTextFile(strVocFile);
+    //    if(!bVocLoad)
+    //    {
+    //        cerr << "Wrong path to vocabulary. " << endl;
+    //        cerr << "Falied to open at: " << strVocFile << endl;
+    //        exit(-1);
+    //    }
+    //    cout << "Vocabulary loaded!" << endl << endl;
 
-        //Create KeyFrame Database
-        mpKeyFrameDatabase = new KeyFrameDatabase(*mpVocabulary);
+    //    //Create KeyFrame Database
+    //    mpKeyFrameDatabase = new KeyFrameDatabase(*mpVocabulary);
 
-        cout << "Load File" << endl;
+    //    cout << "Load File" << endl;
 
-        // Load the file with an earlier session
-        //clock_t start = clock();
-        cout << "Initialization of Atlas from file: " << mStrLoadAtlasFromFile << endl;
-        bool isRead = LoadAtlas(FileType::BINARY_FILE);
+    //    // Load the file with an earlier session
+    //    //clock_t start = clock();
+    //    cout << "Initialization of Atlas from file: " << mStrLoadAtlasFromFile << endl;
+    //    bool isRead = LoadAtlas(FileType::BINARY_FILE);
 
-        if(!isRead)
-        {
-            cout << "Error to load the file, please try with other session file or vocabulary file" << endl;
-            exit(-1);
-        }
-        //mpKeyFrameDatabase = new KeyFrameDatabase(*mpVocabulary);
+    //    if(!isRead)
+    //    {
+    //        cout << "Error to load the file, please try with other session file or vocabulary file" << endl;
+    //        exit(-1);
+    //    }
+    //    //mpKeyFrameDatabase = new KeyFrameDatabase(*mpVocabulary);
 
 
-        //cout << "KF in DB: " << mpKeyFrameDatabase->mnNumKFs << "; words: " << mpKeyFrameDatabase->mnNumWords << endl;
+    //    //cout << "KF in DB: " << mpKeyFrameDatabase->mnNumKFs << "; words: " << mpKeyFrameDatabase->mnNumWords << endl;
 
-        loadedAtlas = true;
+    //    loadedAtlas = true;
 
-        mpAtlas->CreateNewMap();
+    //    mpAtlas->CreateNewMap();
 
-        //clock_t timeElapsed = clock() - start;
-        //unsigned msElapsed = timeElapsed / (CLOCKS_PER_SEC / 1000);
-        //cout << "Binary file read in " << msElapsed << " ms" << endl;
+    //    //clock_t timeElapsed = clock() - start;
+    //    //unsigned msElapsed = timeElapsed / (CLOCKS_PER_SEC / 1000);
+    //    //cout << "Binary file read in " << msElapsed << " ms" << endl;
 
-        //usleep(10*1000*1000);
-    }
+    //    //usleep(10*1000*1000);
+    //}
 
 
     if (mSensor==IMU_STEREO || mSensor==IMU_MONOCULAR || mSensor==IMU_RGBD)
@@ -319,8 +319,8 @@ Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, 
 
     unique_lock<mutex> lock2(mMutexState);
     mTrackingState = mpTracker->mState;
-    mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
-    mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
+    mTrackedMapPoints = mpTracker->mCurrentFrame->mvpMapPoints;
+    mTrackedKeyPointsUn = mpTracker->mCurrentFrame->mvKeysUn;
 
     return Tcw;
 }
@@ -391,8 +391,8 @@ Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const
 
     unique_lock<mutex> lock2(mMutexState);
     mTrackingState = mpTracker->mState;
-    mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
-    mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
+    mTrackedMapPoints = mpTracker->mCurrentFrame->mvpMapPoints;
+    mTrackedKeyPointsUn = mpTracker->mCurrentFrame->mvKeysUn;
     return Tcw;
 }
 
@@ -467,8 +467,8 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
 
     unique_lock<mutex> lock2(mMutexState);
     mTrackingState = mpTracker->mState;
-    mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
-    mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
+    mTrackedMapPoints = mpTracker->mCurrentFrame->mvpMapPoints;
+    mTrackedKeyPointsUn = mpTracker->mCurrentFrame->mvKeysUn;
 
     return Tcw;
 }
@@ -545,11 +545,11 @@ void System::Shutdown()
         /*usleep(5000);
     }*/
 
-    if(!mStrSaveAtlasToFile.empty())
-    {
-        Verbose::PrintMess("Atlas saving to file " + mStrSaveAtlasToFile, Verbose::VERBOSITY_NORMAL);
-        SaveAtlas(FileType::BINARY_FILE);
-    }
+    //if(!mStrSaveAtlasToFile.empty())
+    //{
+    //    Verbose::PrintMess("Atlas saving to file " + mStrSaveAtlasToFile, Verbose::VERBOSITY_NORMAL);
+    //    SaveAtlas(FileType::BINARY_FILE);
+    //}
 
     /*if(mpViewer)
         pangolin::BindToContext("ORB-SLAM2: Map Viewer");*/
@@ -718,7 +718,6 @@ void System::SaveTrajectoryEuRoC(const string &filename)
     for(auto lit=mpTracker->mlRelativeFramePoses.begin(),
         lend=mpTracker->mlRelativeFramePoses.end();lit!=lend;lit++, lRit++, lT++, lbL++)
     {
-        //cout << "1" << endl;
         if(*lbL)
             continue;
 
@@ -1399,7 +1398,7 @@ void System::InsertTrackTime(double& time)
     mpTracker->vdTrackTotal_ms.push_back(time);
 }
 #endif
-
+/*
 void System::SaveAtlas(int type){
     if(!mStrSaveAtlasToFile.empty())
     {
@@ -1441,6 +1440,7 @@ void System::SaveAtlas(int type){
         }
     }
 }
+
 
 bool System::LoadAtlas(int type)
 {
@@ -1544,6 +1544,7 @@ string System::CalculateCheckSum(string filename, int type)
 
     return checksum;
 }
+*/
 
 } //namespace ORB_SLAM
 

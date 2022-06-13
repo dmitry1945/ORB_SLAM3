@@ -67,8 +67,10 @@ public:
     // Constructor for Monocular cameras.
     Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
 
+    static int frame_count;
+
     // Destructor
-    // ~Frame();
+    virtual ~Frame();
 
     // Extract ORB on the image. 0 for left image and 1 for right image.
     void ExtractORB(int flag, const cv::Mat &im, const int x0, const int x1);
@@ -114,6 +116,7 @@ public:
     // Search a match for each keypoint in the left image to a keypoint in the right image.
     // If there is a match, depth is computed and the right coordinate associated to the left keypoint is stored.
     void ComputeStereoMatches();
+    void ComputeStereoMatchesORB();
 
     // Associate a "right" coordinate to a keypoint if there is valid depth in the depthmap.
     void ComputeStereoFromRGBD(const cv::Mat &imDepth);
@@ -208,6 +211,18 @@ public:
     static float invfx;
     static float invfy;
     cv::Mat mDistCoef;
+
+    static cv::Mat M1;
+    static cv::Mat D1;
+    static cv::Mat R1;
+    static cv::Mat P1;
+
+    static cv::Mat M2;
+    static cv::Mat D2;
+    static cv::Mat R2;
+    static cv::Mat P2;
+    static cv::Mat rmap[2][2];
+    static cv::Mat H12;
 
     // Stereo baseline multiplied by fx.
     float mbf;
@@ -309,6 +324,7 @@ private:
     // Only for the RGB-D case. Stereo must be already rectified!
     // (called in the constructor).
     void UndistortKeyPoints();
+    void UndistortStereoKeyPoints();
 
     // Computes image bounds for the undistorted image (called in the constructor).
     void ComputeImageBounds(const cv::Mat &imLeft);
@@ -367,7 +383,27 @@ public:
     }
 
     Sophus::SE3<double> T_test;
+
 };
+
+
+
+class Features
+{
+public:
+
+    // TBD: it's located here just because it's useful
+    static cv::Ptr<cv::ORB> orb_detector;
+    //static cv::Ptr<cv::SIFT> orb_detector;
+    static cv::BFMatcher* orb_matcher;
+
+    static std::mutex* common_mutex;
+    static cv::Mat imMask;
+    static void InitMask(int rows, int cols);
+    //static cv::Ptr<cv::cuda::ORB> orb_cuda;
+
+};
+
 
 }// namespace ORB_SLAM
 

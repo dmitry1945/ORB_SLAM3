@@ -28,18 +28,34 @@ set(SRCS_DUTILS
   DUtils/Random.cpp
   DUtils/Timestamp.cpp)
 
+  FIND_PACKAGE(Boost REQUIRED COMPONENTS thread system)
 
-find_package(OpenCV 4 QUIET)
+# FIND_PACKAGE(Boost)
+#IF (Boost_FOUND)
+    INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
+    ADD_DEFINITIONS( "-DHAS_BOOST" )
+#ENDIF()
+set(Boost_USE_STATIC_LIBS   ON)
+message("Boost_INCLUDE_DIR - ${Boost_INCLUDE_DIR}")
+
+  find_package(Eigen3 REQUIRED)
+message("EIGEN3_INCLUDE_DIRS - ${EIGEN3_INCLUDE_DIRS}")
+
+find_package(OpenCV REQUIRED)
 if(NOT OpenCV_FOUND)
-   find_package(OpenCV 3.0 QUIET)
+  #  find_package(OpenCV 2.4.3 QUIET)
    if(NOT OpenCV_FOUND)
-      message(FATAL_ERROR "OpenCV > 3.0 not found.")
+      message(FATAL_ERROR "OpenCV > 2.4.3 not found.")
    endif()
 endif()
+message("OpenCV_INCLUDE_DIRS - ${OpenCV_INCLUDE_DIRS}")
 
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
+set(Boost_LIBRARY_DIRS ${Boost_LIBRARY_DIR})
 
+link_directories(${Boost_LIBRARY_DIRS})
+message("boost_libs - ${Boost_LIBRARY_DIRS}")
 include_directories(${OpenCV_INCLUDE_DIRS})
-add_library(DBoW2 SHARED ${SRCS_DBOW2} ${SRCS_DUTILS})
-target_link_libraries(DBoW2 ${OpenCV_LIBS})
+add_library(DBoW2 STATIC ${SRCS_DBOW2} ${SRCS_DUTILS})
+target_link_libraries(DBoW2 ${OpenCV_LIBS} ${Boost_LIBRARIES})
 

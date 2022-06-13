@@ -331,6 +331,11 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
 void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 {
     stringstream s;
+    stringstream s_pos;
+    stringstream s_dir;
+    s_pos << " ";
+    s_dir << " ";
+
     if(nState==Tracking::NO_IMAGES_YET)
         s << " WAITING FOR IMAGES";
     else if(nState==Tracking::NOT_INITIALIZED)
@@ -347,6 +352,31 @@ void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
         s << "Maps: " << nMaps << ", KFs: " << nKFs << ", MPs: " << nMPs << ", Matches: " << mnTracked;
         if(mnTrackedVO>0)
             s << ", + VO matches: " << mnTrackedVO;
+        //std::cout << s.str() << std::endl;
+        
+        Eigen::Vector3f Ow = mCurrentFrame.GetCameraCenter();
+
+        Eigen::Matrix3f Rwc = mCurrentFrame.GetRwc();
+
+        std::vector<float> orient = Converter::toEuler(Converter::toCvMat(Rwc));
+        if (orient.size() != 0)
+        {
+            std::stringstream ss;
+            ss << "X " << setprecision(3) << fixed << Ow(0);
+            ss << " Y " << setprecision(3) << fixed << Ow(1);
+            ss << " Z " << setprecision(3) << fixed << Ow(2);
+            ss << "]   ";
+            s_pos << ss.str();
+
+            std::stringstream ss1;
+            ss1 << "Dir [R " << setprecision(3) << fixed << orient[0] / CV_PI * 180;
+            ss1 << " P " << setprecision(3) << fixed << orient[2] / CV_PI * 180;
+            ss1 << " Y " << setprecision(3) << fixed << orient[1] / CV_PI * 180;
+            ss1 << "]";
+            //		s_pos << "Pos: " << Ow;
+            s_dir << ss1.str();
+        }
+
     }
     else if(nState==Tracking::LOST)
     {
@@ -360,10 +390,15 @@ void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
     int baseline=0;
     cv::Size textSize = cv::getTextSize(s.str(),cv::FONT_HERSHEY_PLAIN,1,1,&baseline);
 
-    imText = cv::Mat(im.rows+textSize.height+10,im.cols,im.type());
+    //imText = cv::Mat(im.rows+textSize.height+10,im.cols,im.type());
+    imText = cv::Mat(im.rows + textSize.height + 10 * 3 * 3, im.cols, im.type());
     im.copyTo(imText.rowRange(0,im.rows).colRange(0,im.cols));
     imText.rowRange(im.rows,imText.rows) = cv::Mat::zeros(textSize.height+10,im.cols,im.type());
     cv::putText(imText,s.str(),cv::Point(5,imText.rows-5),cv::FONT_HERSHEY_PLAIN,1,cv::Scalar(255,255,255),1,8);
+
+    cv::putText(imText, s_pos.str(), cv::Point(5, imText.rows - 5 - 40), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 255, 255), 1, 8);
+    cv::putText(imText, s_dir.str(), cv::Point(5, imText.rows - 5 - 20), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 255, 255), 1, 8);
+
 
 }
 
@@ -371,12 +406,12 @@ void FrameDrawer::Update(Tracking *pTracker)
 {
     unique_lock<mutex> lock(mMutex);
     pTracker->mImGray.copyTo(mIm);
-    mvCurrentKeys=pTracker->mCurrentFrame.mvKeys;
-    mThDepth = pTracker->mCurrentFrame.mThDepth;
-    mvCurrentDepth = pTracker->mCurrentFrame.mvDepth;
+    mvCurrentKeys=pTracker->mCurrentFrame->mvKeys;
+    mThDepth = pTracker->mCurrentFrame->mThDepth;
+    mvCurrentDepth = pTracker->mCurrentFrame->mvDepth;
 
     if(both){
-        mvCurrentKeysRight = pTracker->mCurrentFrame.mvKeysRight;
+        mvCurrentKeysRight = pTracker->mCurrentFrame->mvKeysRight;
         pTracker->mImRight.copyTo(mImRight);
         N = mvCurrentKeys.size() + mvCurrentKeysRight.size();
     }
@@ -389,7 +424,7 @@ void FrameDrawer::Update(Tracking *pTracker)
     mbOnlyTracking = pTracker->mbOnlyTracking;
 
     //Variables for the new visualization
-    mCurrentFrame = pTracker->mCurrentFrame;
+    mCurrentFrame = *pTracker->mCurrentFrame;
     mmProjectPoints = mCurrentFrame.mmProjectPoints;
     mmMatchedInImage.clear();
 
@@ -405,17 +440,17 @@ void FrameDrawer::Update(Tracking *pTracker)
 
     if(pTracker->mLastProcessedState==Tracking::NOT_INITIALIZED)
     {
-        mvIniKeys=pTracker->mInitialFrame.mvKeys;
+        mvIniKeys=pTracker->mInitialFrame->mvKeys;
         mvIniMatches=pTracker->mvIniMatches;
     }
     else if(pTracker->mLastProcessedState==Tracking::OK)
     {
         for(int i=0;i<N;i++)
         {
-            MapPoint* pMP = pTracker->mCurrentFrame.mvpMapPoints[i];
+            MapPoint* pMP = pTracker->mCurrentFrame->mvpMapPoints[i];
             if(pMP)
             {
-                if(!pTracker->mCurrentFrame.mvbOutlier[i])
+                if(!pTracker->mCurrentFrame->mvbOutlier[i])
                 {
                     if(pMP->Observations()>0)
                         mvbMap[i]=true;

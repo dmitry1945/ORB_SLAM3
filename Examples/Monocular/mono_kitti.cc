@@ -25,11 +25,54 @@
 #include<opencv2/core/core.hpp>
 
 #include"System.h"
+#include "camera_opencv.h"
 
 using namespace std;
 
 void LoadImages(const string &strSequence, vector<string> &vstrImageFilenames,
                 vector<double> &vTimestamps);
+bool use_cam = false;
+
+
+// OpenCV port of 'LAPM' algorithm (Nayar89)
+double modifiedLaplacian(const cv::Mat& src)
+{
+    cv::Mat M = (cv::Mat_<double>(3, 1) << -1, 2, -1);
+    cv::Mat G = cv::getGaussianKernel(3, -1, CV_64F);
+
+    cv::Mat Lx;
+    cv::sepFilter2D(src, Lx, CV_64F, M, G);
+
+    cv::Mat Ly;
+    cv::sepFilter2D(src, Ly, CV_64F, G, M);
+
+    cv::Mat FM = cv::abs(Lx) + cv::abs(Ly);
+
+    double focusMeasure = cv::mean(FM).val[0];
+    return focusMeasure;
+}
+// OpenCV port of 'LAPV' algorithm (Pech2000)
+double varianceOfLaplacian(const cv::Mat& src)
+{
+    cv::Mat lap;
+    cv::Laplacian(src, lap, CV_64F);
+
+    cv::Scalar mu, sigma;
+    cv::meanStdDev(lap, mu, sigma);
+
+    double focusMeasure = sigma.val[0] * sigma.val[0];
+    return focusMeasure;
+}
+
+// OpenCV port of 'GLVN' algorithm (Santos97)
+double normalizedGraylevelVariance(const cv::Mat& src)
+{
+    cv::Scalar mu, sigma;
+    cv::meanStdDev(src, mu, sigma);
+
+    double focusMeasure = (sigma.val[0] * sigma.val[0]) / mu.val[0];
+    return focusMeasure;
+}
 
 int main(int argc, char **argv)
 {
@@ -43,6 +86,8 @@ int main(int argc, char **argv)
     vector<string> vstrImageFilenames;
     vector<double> vTimestamps;
     LoadImages(string(argv[3]), vstrImageFilenames, vTimestamps);
+    std::cout << "vstrImageFilenames - " << vstrImageFilenames.size() << endl;
+    std::cout << "vTimestamps - " << vTimestamps.size() << endl;
 
     int nImages = vstrImageFilenames.size();
 
@@ -61,13 +106,92 @@ int main(int argc, char **argv)
     // Main loop
     double t_resize = 0.f;
     double t_track = 0.f;
+    cv::Rect pic1(0, 0, 640, 480);
+
+    cv::VideoCapture cam;
+    cv::Mat cameraMatrix;
+    cv::Mat distCoeffs;
+
+    if (use_cam)
+    {
+        cam = camera_init(0, 1280, 720);
+        cv::FileStorage fSettings("c:/Work/Espressif/Tech/Arrow/SFM/SW/SFM_SLAM/Examples/StereoCam/intrinsics_mono.yml", cv::FileStorage::READ);
+        fSettings["cameraMatrix"] >> cameraMatrix;
+        fSettings["distCoeffs"] >> distCoeffs;
+        fSettings.release();
+    }
 
     cv::Mat im;
+
     for(int ni=0; ni<nImages; ni++)
     {
-        // Read image from file
-        im = cv::imread(vstrImageFilenames[ni],cv::IMREAD_UNCHANGED); //,cv::IMREAD_UNCHANGED);
-        double tframe = vTimestamps[ni];
+        if (use_cam)
+        {
+            cv::Mat img_color;
+            cv::Mat img_dist;
+            cam >> img_color;
+            cvtColor(img_color, img_dist, cv::COLOR_BGR2GRAY);
+
+            //std::vector<cv::Mat> channels;
+            //cv::Mat hsv;
+            //cv::cvtColor(img_color, hsv, cv::COLOR_BGR2HSV);
+            //cv::split(hsv, channels);
+            //img_dist = channels[0];
+            //cv::Canny(img_dist, img_dist, 30, 95);
+
+            if (0) // check coeffs
+            {
+                std::cout << "start check" << std::endl;
+                for (size_t y = 0; y < img_dist.rows; y++)
+                {
+                    for (size_t x = 0; x < img_dist.cols; x++)
+                    {
+                        img_dist.at<uint8_t>(y, x) = 0;
+                        img_dist.at<uint8_t>(100, x) = 255/2;
+                        img_dist.at<uint8_t>(img_dist.rows - 100, x) = 255/2;
+                        img_dist.at<uint8_t>(img_dist.rows / 2, x) = 255/2;
+                    }
+                    img_dist.at<uint8_t>(y, 100) = 255/2;
+                    img_dist.at<uint8_t>(y, img_dist.cols -100) = 255/2;
+                    img_dist.at<uint8_t>(y, img_dist.cols/2) = 255/2;
+                }
+                std::cout << "show check"  << std::endl;
+                cv::imshow("check ", img_dist);
+                //distCoeffs *= 0;
+                cv::undistort(img_dist, im, cameraMatrix, distCoeffs);
+                im += img_dist;
+                cv::imshow("Result  undistort", im);
+                cv::waitKey(100);
+                //std::cout << "Blur detection: " << varianceOfLaplacian(im) << ", modifiedLaplacian = " << modifiedLaplacian(im)  << std::endl;
+                continue;
+            }
+            else
+            {
+                distCoeffs *= 0;
+                cv::undistort(img_dist, im, cameraMatrix, distCoeffs);
+                cv::imshow("Result  undistort", im);
+                cv::waitKey(1);
+                //TestTrack(im);
+                //continue;
+
+            }
+            double blur_im = varianceOfLaplacian(im);
+            std::cout << "blur_im = " << blur_im << std::endl;
+
+            if (blur_im < 2000)
+            {
+                // skip image
+                continue;
+            }
+        }
+        else
+        {        // Read image from file
+            im = cv::imread(vstrImageFilenames[ni],cv::IMREAD_UNCHANGED); //,cv::IMREAD_UNCHANGED);
+            //im = im(pic1);
+            std::cout << "file - " << vstrImageFilenames[ni] << std::endl;
+
+        }
+		double tframe = vTimestamps[ni];
 
         if(im.empty())
         {
@@ -78,40 +202,50 @@ int main(int argc, char **argv)
         if(imageScale != 1.f)
         {
 #ifdef REGISTER_TIMES
-    #ifdef COMPILEDWITHC11
             std::chrono::steady_clock::time_point t_Start_Resize = std::chrono::steady_clock::now();
-    #else
-            std::chrono::monotonic_clock::time_point t_Start_Resize = std::chrono::monotonic_clock::now();
-    #endif
 #endif
             int width = im.cols * imageScale;
             int height = im.rows * imageScale;
             cv::resize(im, im, cv::Size(width, height));
 #ifdef REGISTER_TIMES
-    #ifdef COMPILEDWITHC11
             std::chrono::steady_clock::time_point t_End_Resize = std::chrono::steady_clock::now();
-    #else
-            std::chrono::monotonic_clock::time_point t_End_Resize = std::chrono::monotonic_clock::now();
-    #endif
             t_resize = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t_End_Resize - t_Start_Resize).count();
             SLAM.InsertResizeTime(t_resize);
 #endif
         }
 
-#ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-#else
-        std::chrono::monotonic_clock::time_point t1 = std::chrono::monotonic_clock::now();
-#endif
 
         // Pass the image to the SLAM system
         SLAM.TrackMonocular(im,tframe,vector<ORB_SLAM3::IMU::Point>(), vstrImageFilenames[ni]);
-
-#ifdef COMPILEDWITHC11
+        
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-#else
-        std::chrono::monotonic_clock::time_point t2 = std::chrono::monotonic_clock::now();
-#endif
+        int active_points = 0;
+        int del_points = 0;
+        for (size_t i = 0; i < SLAM.mpTracker->mCurrentFrame->mvpMapPoints.size(); i++)
+        {
+            if (SLAM.mpTracker->mCurrentFrame->mvpMapPoints[i] != NULL)
+            {
+                if (SLAM.mpTracker->mCurrentFrame->mvpMapPoints[i]->Observations() > 0)
+                {
+                    active_points++;
+                }
+            }
+            else
+            {
+                del_points++;
+            }
+        }
+        //std::cout << "Frames: " << ORB_SLAM3::Frame::frame_count << std::endl;
+        //std::cout << "Maps: " << SLAM.mpAtlas->CountMaps() << 
+        //    ", KFs: " << SLAM.mpAtlas->KeyFramesInMap() <<
+        //    ", MPs: " << SLAM.mpAtlas->MapPointsInMap() <<
+        //    ", MPs in Frame: " << SLAM.mpTracker->mCurrentFrame->mvpMapPoints.size() << 
+        //    ", active_points: " << active_points <<
+        //    ", del_points: " << del_points << std::endl;
+
+        //cv::imshow("Processing image: ", im);
+        //cv::waitKey(1);
 
 #ifdef REGISTER_TIMES
             t_track = t_resize + std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t2 - t1).count();
@@ -132,7 +266,10 @@ int main(int argc, char **argv)
         if(ttrack<T)
             usleep((T-ttrack)*1e6);
     }
-
+    while (true)
+    {
+        cv::waitKey(10);
+    }
     // Stop all threads
     SLAM.Shutdown();
 
@@ -153,34 +290,57 @@ int main(int argc, char **argv)
     return 0;
 }
 
-void LoadImages(const string &strPathToSequence, vector<string> &vstrImageFilenames, vector<double> &vTimestamps)
+
+#include <string>
+#include <iostream>
+#include <filesystem>
+#include <algorithm>
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
+#include <string>
+#include <vector>
+namespace fs = std::filesystem;
+
+
+void LoadImages(const string& strPathToSequence, vector<string>& vstrImageFilenames, vector<double>& vTimestamps)
 {
-    ifstream fTimes;
-    string strPathTimeFile = strPathToSequence + "/times.txt";
-    fTimes.open(strPathTimeFile.c_str());
-    while(!fTimes.eof())
+    //std::string path = strPathToSequence;
+    //auto entry = fs::directory_iterator(path);
+    //int entry_count = 2;
+    //while (entry != fs::directory_iterator())
+    //{
+
+    //    stringstream ss;
+    //    ss << setfill('0') << setw(6) << entry_count;
+    //    std::string filename = strPathToSequence + "/frame_" + ss.str() + "_0.png";
+    //    vstrImageFilenames.push_back(filename);
+    //    vTimestamps.push_back(0.1 * (double)entry_count);
+    //    //std::cout << filename << ", count " << entry_count << std::endl;
+    //    entry++;
+    //    entry_count++;
+    //    // if (entry_count > 1600) break;
+    //}
+
+    std::string path = strPathToSequence;
+    auto entry = fs::directory_iterator(path);
+    int entry_count = 0;
+    while (entry != fs::directory_iterator())
     {
-        string s;
-        getline(fTimes,s);
-        if(!s.empty())
-        {
-            stringstream ss;
-            ss << s;
-            double t;
-            ss >> t;
-            vTimestamps.push_back(t);
-        }
+        std::string filename = entry->path().string();
+        vstrImageFilenames.push_back(filename);
+        vTimestamps.push_back(0.1 * (double)entry_count);
+        //std::cout << filename << ", count " << entry_count << std::endl;
+        entry++;
+        entry_count++;
+        // if (entry_count > 1600) break;
     }
-
-    string strPrefixLeft = strPathToSequence + "/image_0/";
-
-    const int nTimes = vTimestamps.size();
-    vstrImageFilenames.resize(nTimes);
-
-    for(int i=0; i<nTimes; i++)
-    {
-        stringstream ss;
-        ss << setfill('0') << setw(6) << i;
-        vstrImageFilenames[i] = strPrefixLeft + ss.str() + ".png";
-    }
+    std::sort(vstrImageFilenames.begin(), vstrImageFilenames.end(),
+        [](const auto& lhs, const auto& rhs) {
+            return lhs < rhs;
+        });
+    //for (const auto& file : vstrImageFilenames) {
+    //    std::cout << file << '\n';
+    //}
+    //std::cout << "Count - " << entry_count << std::endl;
 }
