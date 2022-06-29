@@ -27,14 +27,15 @@
 namespace ORB_SLAM3
 {
 
-FrameDrawer::FrameDrawer(Atlas* pAtlas):both(false),mpAtlas(pAtlas)
+FrameDrawerOpenCV::FrameDrawerOpenCV(Atlas* pAtlas):mpAtlas(pAtlas)
 {
+    this->both = false;
     mState=Tracking::SYSTEM_NOT_READY;
     mIm = cv::Mat(480,640,CV_8UC3, cv::Scalar(0,0,0));
     mImRight = cv::Mat(480,640,CV_8UC3, cv::Scalar(0,0,0));
 }
 
-cv::Mat FrameDrawer::DrawFrame(float imageScale)
+cv::Mat FrameDrawerOpenCV::DrawFrame(float imageScale)
 {
     cv::Mat im;
     vector<cv::KeyPoint> vIniKeys; // Initialization: KeyPoints in reference frame
@@ -201,7 +202,7 @@ cv::Mat FrameDrawer::DrawFrame(float imageScale)
     return imWithInfo;
 }
 
-cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
+cv::Mat FrameDrawerOpenCV::DrawRightFrame(float imageScale)
 {
     cv::Mat im;
     vector<cv::KeyPoint> vIniKeys; // Initialization: KeyPoints in reference frame
@@ -328,7 +329,7 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
 
 
 
-void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
+void FrameDrawerOpenCV::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 {
     stringstream s;
     stringstream s_pos;
@@ -402,7 +403,7 @@ void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 
 }
 
-void FrameDrawer::Update(Tracking *pTracker)
+void FrameDrawerOpenCV::Update(Tracking *pTracker)
 {
     unique_lock<mutex> lock(mMutex);
     pTracker->mImGray.copyTo(mIm);

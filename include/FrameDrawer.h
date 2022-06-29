@@ -37,21 +37,41 @@ namespace ORB_SLAM3
 class Tracking;
 class Viewer;
 
+
 class FrameDrawer
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    FrameDrawer(Atlas* pAtlas);
+        FrameDrawer() {};
 
     // Update info from the last processed frame.
-    void Update(Tracking *pTracker);
+    virtual void Update(Tracking* pTracker) {};
 
     // Draw last processed frame.
-    cv::Mat DrawFrame(float imageScale=1.f);
-    cv::Mat DrawRightFrame(float imageScale=1.f);
+    virtual cv::Mat DrawFrame(float imageScale = 1.f) { return cv::Mat();};
+    virtual cv::Mat DrawRightFrame(float imageScale = 1.f) { return cv::Mat(); };
 
     bool both;
     int mnTracked, mnTrackedVO;
+    virtual ~FrameDrawer() {};
+};
+
+class FrameDrawerOpenCV : public FrameDrawer
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+        FrameDrawerOpenCV(Atlas* pAtlas);
+
+    // Update info from the last processed frame.
+    virtual void Update(Tracking *pTracker);
+
+    // Draw last processed frame.
+    virtual cv::Mat DrawFrame(float imageScale=1.f);
+    virtual cv::Mat DrawRightFrame(float imageScale=1.f);
+
+    //bool both;
+    //int mnTracked, mnTrackedVO;
+    virtual ~FrameDrawerOpenCV() {};
 
 protected:
 

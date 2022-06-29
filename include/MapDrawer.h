@@ -37,42 +37,23 @@ class MapDrawer
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    MapDrawer(Atlas* pAtlas, const string &strSettingPath, Settings* settings);
+        MapDrawer() {}
 
-    void newParameterLoader(Settings* settings);
+    virtual void Init(Atlas* pAtlas, const string& strSettingPath, Settings* settings) {}
 
-    Atlas* mpAtlas;
+    virtual void newParameterLoader(Settings* settings) {}
 
-    void DrawMapPoints();
-    void DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const bool bDrawInertialGraph, const bool bDrawOptLba);
-    void DrawCurrentCamera(pangolin::OpenGlMatrix &Twc);
-    void SetCurrentCameraPose(const Sophus::SE3f &Tcw);
-    void SetReferenceKeyFrame(KeyFrame *pKF);
-    void GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M, pangolin::OpenGlMatrix &MOw);
+    virtual void DrawMapPoints() {}
+    virtual void DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const bool bDrawInertialGraph, const bool bDrawOptLba) {}
+    virtual void DrawCurrentCamera(pangolin::OpenGlMatrix& Twc) {}
+    virtual void SetCurrentCameraPose(const Sophus::SE3f& Tcw) {}
+    virtual void SetReferenceKeyFrame(KeyFrame* pKF) {}
+    virtual void GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix& M, pangolin::OpenGlMatrix& MOw) {}
 
-private:
-
-    bool ParseViewerParamFile(cv::FileStorage &fSettings);
-
-    float mKeyFrameSize;
-    float mKeyFrameLineWidth;
-    float mGraphLineWidth;
-    float mPointSize;
-    float mCameraSize;
-    float mCameraLineWidth;
-
-    Sophus::SE3f mCameraPose;
-
-    std::mutex mMutexCamera;
-
-    float mfFrameColors[6][3] = {{0.0f, 0.0f, 1.0f},
-                                {0.8f, 0.4f, 1.0f},
-                                {1.0f, 0.2f, 0.4f},
-                                {0.6f, 0.0f, 1.0f},
-                                {1.0f, 1.0f, 0.0f},
-                                {0.0f, 1.0f, 1.0f}};
+    virtual Atlas* GetAtlas() { return NULL; }
 
 };
+
 
 } //namespace ORB_SLAM
 

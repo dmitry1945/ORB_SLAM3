@@ -25,6 +25,8 @@
 #include<opencv2/core/core.hpp>
 
 #include<System.h>
+#include "ViewerPangolin.h"
+#include "MapDrawerPangolin.h"
 
 using namespace std;
 
@@ -46,9 +48,11 @@ int main(int argc, char **argv)
     LoadImages(string(argv[3]), vstrImageLeft, vstrImageRight, vTimestamps);
 
     const int nImages = vstrImageLeft.size();
-
+    ORB_SLAM3::ViewerPangolin* pviewer = new ORB_SLAM3::ViewerPangolin();
+    ORB_SLAM3::MapDrawerPangolin* map_drawer = new ORB_SLAM3::MapDrawerPangolin();
+    pviewer->mpMapDrawer = map_drawer;
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::STEREO,true);
+    ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::STEREO, pviewer, map_drawer, true);
     float imageScale = SLAM.GetImageScale();
 
     // Vector for tracking time statistics
@@ -80,7 +84,7 @@ int main(int argc, char **argv)
             cv::Rect pic1(0, 0, 3040 / 2, 1080);
             cv::Rect pic2(3040 / 2, 0, 3040 / 2, 1080);
             cv::Mat im = cv::imread(vstrImageLeft[ni], cv::IMREAD_GRAYSCALE); //,cv::IMREAD_UNCHANGED);
-            std::cout << "F["<< ni << "] -" << vstrImageLeft[ni] << std::endl;
+//            std::cout << "F["<< ni << "] -" << vstrImageLeft[ni] << std::endl;
 
             imLeft = im(pic1);
             imRight = im(pic2);
@@ -107,7 +111,9 @@ int main(int argc, char **argv)
         std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
 
         // Pass the images to the SLAM system
-        SLAM.TrackStereo(imLeft,imRight,tframe);
+        Sophus::SE3f pos = SLAM.TrackStereo(imLeft,imRight,tframe);
+
+        std::cout << "F[" << ni << "] -" << pos.inverse().translation().transpose() << std::endl;
 
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
 
